@@ -49,7 +49,7 @@
 
     <config-file target="AndroidManifest.xml" parent="/manifest/application">
         <service
-            android:name="edu.berkeley.eecs.cfc_tracker.smap.AuthenticatorService">
+            android:name="edu.berkeley.eecs.emission.cordova.serversync.AuthenticatorService">
         	<intent-filter>
             	<action android:name="android.accounts.AccountAuthenticator"/>
         	</intent-filter>
@@ -58,7 +58,7 @@
             	android:resource="@xml/authenticator" />
     	</service>
 		<service
-                android:name="edu.berkeley.eecs.cfc_tracker.smap.SyncService"
+                android:name="edu.berkeley.eecs.emission.cordova.serversync.SyncService"
                 android:exported="true"
                 android:process=":sync">
             <intent-filter>
@@ -68,8 +68,8 @@
                     android:resource="@xml/syncadapter" />
         </service>
     	<provider
-        	android:name="edu.berkeley.eecs.cordova.serversync.StubContentProvider"
-        	android:authorities="edu.berkeley.eecs.cfc_tracker.provider"
+        	android:name="edu.berkeley.eecs.emission.cordova.serversync.StubContentProvider"
+        	android:authorities="edu.berkeley.eecs.emission.provider"
         	android:exported="false"
         	android:syncable="true"/>
     </config-file>
