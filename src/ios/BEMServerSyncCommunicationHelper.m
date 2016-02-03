@@ -23,7 +23,7 @@
 #import "BEMClientStatsDatabase.h"
 #import "BEMActivitySync.h"
 #import "BEMBuiltinUserCache.h"
-#import "Constants.h"
+#import "BEMConstants.h"
 
 static NSString* kUsercachePutPath = @"/usercache/put";
 static NSString* kUsercacheGetPath = @"/usercache/get";
