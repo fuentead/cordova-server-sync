@@ -9,18 +9,19 @@
 #import <Foundation/NSObjCRuntime.h>
 #import <objc/objc.h>
 #import <objc/runtime.h>
-#import "DataUtils.h"
+#import "BEMActivitySync.h"
 #import "LocalNotificationManager.h"
-#import "BuiltinUserCache.h"
+#import "BEMBuiltinUserCache.h"
 #import "SimpleLocation.h"
 #import "TimeQuery.h"
 #import "MotionActivity.h"
-#import "CommunicationHelper.h"
+#import "BEMServerSyncCommunicationHelper.h"
 #import "LocationTrackingConfig.h"
+#import <CoreMotion/CoreMotion.h>
 
 @implementation BEMActivitySync
 
-+ (void) getCombinedArray:(NSArray*) locationArray {
++ (void) getCombinedArray:(NSArray*) locationArray withHandler:(CombinedArrayHandler)completionHandler {
     /*
      * In iOS, we can only sign up for activity updates when the app is in the foreground
      * (from https://developer.apple.com/library/ios/documentation/CoreMotion/Reference/CMMotionActivityManager_class/index.html#//apple_ref/occ/instm/CMMotionActivityManager/startActivityUpdatesToQueue:withHandler:)
@@ -33,7 +34,7 @@
      * We need to test this more carefully when we switch to the visit-based tracking.
      */
     if (locationArray.count == 0) {
-        return locationArray;
+        completionHandler(locationArray);
     }
     TimeQuery* tq = [BuiltinUserCache getTimeQuery:locationArray];
     
@@ -48,18 +49,18 @@
                  */
                 NSArray* motionEntries = [self convertToEntries:activities locationEntries:locationArray];
                 NSArray* combinedArray = [locationArray arrayByAddingObjectsFromArray:motionEntries];
-                return combinedArray;
+                completionHandler(combinedArray);
             } else {
                 [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                            @"Got error %@ while querying activity from %@ to %@",
                                                            error, tq.startDate, tq.endDate]];
                 NSLog(@"Got error %@ while querying activity from %@ to %@", error, tq.startDate, tq.endDate);
-                return locationArray;
+                completionHandler(locationArray);
             }
         }];
     } else {
         NSLog(@"Activity recognition unavailable, skipping segmentation");
-        return locationArray;
+        completionHandler(locationArray);
     }
 }
 

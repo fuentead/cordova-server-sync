@@ -9,6 +9,8 @@
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
 
+typedef void (^CombinedArrayHandler)(NSArray* combinedArrayHandler);
+
 @interface BEMActivitySync: NSObject
-+ (NSArray*) getCombinedArray:(NSArray*)locationArray;
++ (void) getCombinedArray:(NSArray*)locationArray withHandler:(CombinedArrayHandler)completionArray;
 @end
