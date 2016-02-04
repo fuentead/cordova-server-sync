@@ -1,4 +1,4 @@
-package edu.berkeley.eecs.emission.cordova.serversync
+package edu.berkeley.eecs.emission.cordova.serversync;
 
 import android.app.Service;
 import android.content.Intent;
@@ -24,7 +24,7 @@ public class SyncService extends Service {
     	System.out.println("SyncService.onCreate called");
         synchronized (sDataAdapterLock) {
             if (sDataAdapter == null) {
-                sDataAdapter = new ConfirmTripsAdapter(getApplicationContext(), true);
+                sDataAdapter = new ServerSyncAdapter(getApplicationContext(), true);
             }
         }
     }	

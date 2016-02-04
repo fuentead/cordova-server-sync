@@ -5,7 +5,18 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+
+import edu.berkeley.eecs.emission.R;
+import edu.berkeley.eecs.emission.cordova.clientstats.ClientStatsHelper;
+import edu.berkeley.eecs.emission.cordova.unifiedlogger.Log;
 
 public class ServerSyncPlugin extends CordovaPlugin {
 
@@ -18,19 +29,24 @@ public class ServerSyncPlugin extends CordovaPlugin {
     public static final String ACCOUNT = "dummy_account";
     private Account mAccount;
     
-    private static final long SYNC_INTERVAL = 1 * 60 * 60; // Changed to 10 secs to debug syncing issues on some android versions
+    // Our ContentResolver is actually a dummy - does this matter?
+    ContentResolver mResolver;
+    
+    private static final long SYNC_INTERVAL = 1 * 60 * 60; // Changed to 10 secs to debug syncing issues on some android version
     // END: variables to set up the automatic syncing
+
+    private static String TAG = "ServerSyncPlugin";
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
-        if (action.equals("init")) {
             Activity actv = cordova.getActivity();
 
+        if (action.equals("init")) {
             mAccount = GetOrCreateSyncAccount(actv); 
             System.out.println("mAccount = "+mAccount);
 
             // TODO: In cfc_tracker but not in e_mission. Needed?
-            mResolver = getContentResolver();
+            mResolver = actv.getContentResolver();
 
             // Get the content resolver for your app
             // Turn on automatic syncing for the default account and authority
@@ -41,27 +57,29 @@ public class ServerSyncPlugin extends CordovaPlugin {
             return true;
         } else if (action.equals("forceSync")) {
             Context ctxt = cordova.getActivity();
-            Log.d("plugin.forceSync called");
+            Log.d(actv, TAG, "plugin.forceSync called");
             /* 
              * Calling forceSync so that we can know when the tasks is complete
              * and do a callback at that point.
              */
-            statsHelper.storeMeasurement(getString(R.string.button_sync_forced), null,
+            ClientStatsHelper statsHelper = new ClientStatsHelper(ctxt);
+            statsHelper.storeMeasurement(ctxt.getString(R.string.button_sync_forced), null,
                     String.valueOf(System.currentTimeMillis()));
 
+            final CallbackContext cachedCallbackContext = callbackContext;
             AsyncTask<Context, Void, Void> task = new AsyncTask<Context, Void, Void>() {
                 protected Void doInBackground(Context... ctxt) {
                     ServerSyncAdapter ssa = new ServerSyncAdapter(ctxt[0], true);
-                    cta.onPerformSync(mAccount, null, AUTHORITY,
+                    ssa.onPerformSync(mAccount, null, AUTHORITY,
                             null, null);
                     return null;
                 }
 
                 protected void onPostExecute(Long result) {
-                    callbackContext.success();
+                    cachedCallbackContext.success();
                 }
             };
-            task.execute(this);
+            task.execute(actv);
             return true;
         } else {
             return false;
@@ -72,7 +90,7 @@ public class ServerSyncPlugin extends CordovaPlugin {
     	// Get an instance of the Android account manager
     	AccountManager accountManager =
     			(AccountManager) context.getSystemService(
-    					ACCOUNT_SERVICE);
+    					context.ACCOUNT_SERVICE);
     	Account[] existingAccounts = accountManager.getAccountsByType(ACCOUNT_TYPE);
     	assert(existingAccounts.length <= 1);
     	if (existingAccounts.length == 1) {
