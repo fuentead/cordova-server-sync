@@ -1,5 +1,5 @@
 #import "BEMServerSyncPlugin.h"
-#import "BEMCommunicationHelper.h"
+#import "BEMServerSyncCommunicationHelper.h"
 
 @implementation BEMServerSyncPlugin
 
@@ -25,7 +25,7 @@
 {
     NSString* callbackId = [command callbackId];
     @try {
-        [BEMCommunicationHelper backgroundSync:(^(UIBackgroundFetchResult) completionHandler) {
+        [BEMServerSyncCommunicationHelper backgroundSync:^(UIBackgroundFetchResult fetcResult) {
             CDVPluginResult* result = [CDVPluginResult
                                        resultWithStatus:CDVCommandStatus_OK];
             [self.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -39,3 +39,5 @@
         [self.commandDelegate sendPluginResult:result callbackId:callbackId];
     }
 }
+@end
+
