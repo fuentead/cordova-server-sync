@@ -1,6 +1,6 @@
 #import <Cordova/CDV.h>
 
-@interface BEMConnectionSettingsPlugin: CDVPlugin <UINavigationControllerDelegate>
+@interface BEMServerSyncPlugin: CDVPlugin <UINavigationControllerDelegate>
 
 /* 
  * Currently unused. Depending on what we choose to do wrt remote

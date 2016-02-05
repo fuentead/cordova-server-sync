@@ -1,7 +1,7 @@
-#import "BEMConnectionSettingsPlugin.h"
-#import "BEMConnectionSettings.h"
+#import "BEMServerSyncPlugin.h"
+#import "BEMCommunicationHelper.h"
 
-@implementation BEMConnectionSettings
+@implementation BEMServerSyncPlugin
 
 - (void)init:(CDVInvokedUrlCommand*)command
 {
