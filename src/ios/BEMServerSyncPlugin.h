@@ -1,41 +1,14 @@
-#import "BEMConnectionSettingsPlugin.h"
-#import "BEMConnectionSettings.h"
+#import <Cordova/CDV.h>
 
-@implementation BEMConnectionSettings
+@interface BEMConnectionSettingsPlugin: CDVPlugin <UINavigationControllerDelegate>
 
-- (void)init:(CDVInvokedUrlCommand*)command
-{
-    NSString* callbackId = [command callbackId];
-    @try {
-        // Currently unused
-        CDVPluginResult* result = [CDVPluginResult
-                                   resultWithStatus:CDVCommandStatus_OK];
-        [self.commandDelegate sendPluginResult:result callbackId:callbackId];
-    }
-    @catch (NSException *exception) {
-        NSString* msg = [NSString stringWithFormat: @"While initializing, error %@", exception];
-        CDVPluginResult* result = [CDVPluginResult
-                                   resultWithStatus:CDVCommandStatus_ERROR
-                                   messageAsString:msg];
-        [self.commandDelegate sendPluginResult:result callbackId:callbackId];
-    }
-}
+/* 
+ * Currently unused. Depending on what we choose to do wrt remote
+ * notifications, visit notification, etc, here's where we will sign up for
+ * events if needed.
+ */
 
-- (void)forceSync:(CDVInvokedUrlCommand*)command
-{
-    NSString* callbackId = [command callbackId];
-    @try {
-        [BEMCommunicationHelper backgroundSync:(^(UIBackgroundFetchResult) completionHandler) {
-            CDVPluginResult* result = [CDVPluginResult
-                                       resultWithStatus:CDVCommandStatus_OK];
-            [self.commandDelegate sendPluginResult:result callbackId:callbackId];
-        }];
-    }
-    @catch (NSException *exception) {
-        NSString* msg = [NSString stringWithFormat: @"While initializing, error %@", exception];
-        CDVPluginResult* result = [CDVPluginResult
-                                   resultWithStatus:CDVCommandStatus_ERROR
-                                   messageAsString:msg];
-        [self.commandDelegate sendPluginResult:result callbackId:callbackId];
-    }
-}
+- (void) init:(CDVInvokedUrlCommand*)command;
+- (void) forceSync:(CDVInvokedUrlCommand*)command;
+
+@end
