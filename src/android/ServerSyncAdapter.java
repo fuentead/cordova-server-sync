@@ -19,24 +19,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
-import edu.berkeley.eecs.e_mission.BatteryUtils;
-import edu.berkeley.eecs.e_mission.ClientStatsHelper;
-import edu.berkeley.eecs.e_mission.CommunicationHelper;
-import edu.berkeley.eecs.e_mission.ModeClassificationHelper;
-import edu.berkeley.eecs.e_mission.OnboardingActivity;
-import edu.berkeley.eecs.e_mission.R;
-import edu.berkeley.eecs.e_mission.UnclassifiedSection;
-import edu.berkeley.eecs.e_mission.UserClassification;
-import edu.berkeley.eecs.e_mission.auth.GoogleAccountManagerAuth;
-import edu.berkeley.eecs.e_mission.auth.UserProfile;
-import edu.berkeley.eecs.e_mission.log.Log;
-import edu.berkeley.eecs.e_mission.usercache.BuiltinUserCache;
-import edu.berkeley.eecs.e_mission.usercache.UserCache;
+import edu.berkeley.eecs.emission.cordova.tracker.sensors.BatteryUtils;
+import edu.berkeley.eecs.emission.cordova.clientstats.ClientStatsHelper;
+import edu.berkeley.eecs.emission.R;
+import edu.berkeley.eecs.emission.cordova.jwtauth.GoogleAccountManagerAuth;
+import edu.berkeley.eecs.emission.cordova.jwtauth.UserProfile;
+import edu.berkeley.eecs.emission.cordova.unifiedlogger.Log;
+import edu.berkeley.eecs.emission.cordova.usercache.BuiltinUserCache;
 
 /**
  * @author shankari
@@ -49,12 +40,11 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 	Properties uuidMap;
 	boolean syncSkip = false;
 	Context cachedContext;
-	ModeClassificationHelper dbHelper;
 	ClientStatsHelper statsHelper;
 	// TODO: Figure out a principled way to do this
 	private static int CONFIRM_TRIPS_ID = 99;
 	
-	public ConfirmTripsAdapter(Context context, boolean autoInitialize) {
+	public ServerSyncAdapter(Context context, boolean autoInitialize) {
 		super(context, autoInitialize);
 		
 		System.out.println("Creating ConfirmTripsAdapter");
@@ -63,7 +53,6 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 		// See https://nononsense-notes.googlecode.com/git-history/3716b44b527096066856133bfc8dfa09f9244db8/NoNonsenseNotes/src/com/nononsenseapps/notepad/sync/SyncAdapter.java
 		// for an example
 		cachedContext = context;
-		dbHelper = new ModeClassificationHelper(context);
 		statsHelper = new ClientStatsHelper(context);
 		// Our ContentProvider is a dummy so there is nothing else to do here
 	}
@@ -90,11 +79,6 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 			return;
 		}
 
-		if (!OnboardingActivity.getOnboardingComplete(cachedContext)) {
-			generateNotification(CONFIRM_TRIPS_ID, "Finish setting up app", edu.berkeley.eecs.e_mission.OnboardingActivity.class);
-			return;
-		}
-		
 		System.out.println("Can we use the extras bundle to transfer information? "+extras);
 		// Get the list of uncategorized trips from the server
 		// hardcoding the URL and the userID for now since we are still using fake data
@@ -126,7 +110,8 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
          * because we want to try it even if the push fails.
          */
 		try {
-			JSONArray entriesReceived = CommunicationHelper.server_to_phone(cachedContext, userToken);
+			JSONArray entriesReceived = edu.berkeley.eecs.emission.cordova.serversync.CommunicationHelper.server_to_phone(
+					cachedContext, userToken);
 			biuc.sync_server_to_phone(entriesReceived);
 		} catch (JSONException e) {
 			Log.e(cachedContext, TAG, "Error "+e+" while saving converting trips to JSON, skipping all of them");
@@ -156,60 +141,13 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 	}
 
 	/*
-	 * The original thought was that the sectionId would be unique, so we could
-	 * use it to uniquely generate an integer that could be used in the notification code.
-	 * We also assumed that we could use is as a database key and as the data in
-	 * the HTTP post request.
-	 * 
-	 * However, the current database schema is that the tripID is unique, and the section ID
-	 * is unique within a trip.
-	 * 
-	 * So we need to send a (tripId, sectionId, userClassification) triplet to the server.
-	 * So we can not longer use key = sectionId, value = userMode.
-	 * 
-	 * Also, we need to create a new data structure that we can pass around instead of using a pair.
-	 */
-	
-	public JSONArray convertListToJSON(List<UserClassification> resultList) {
-		JSONArray retArray = new JSONArray();
-		for (int i = 0; i < resultList.size(); i++) {
-			JSONObject currObj = new JSONObject();
-			UserClassification currClass = resultList.get(i);
-			try {
-				currObj.put("trip_id", currClass.getTripId());
-				currObj.put("section_id", currClass.getSectionId());
-				currObj.put("userMode", currClass.getUserMode());
-				// System.out.println("currObj = "+currObj);
-				retArray.put(currObj);
-			} catch (JSONException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		return retArray;
-	}
-	
-	public List<UnclassifiedSection> convertJSONToList(JSONArray fromServer) {
-		List<UnclassifiedSection> resultList = new ArrayList<UnclassifiedSection>();
-		for (int i=0; i < fromServer.length(); i++) {
-			try {
-				resultList.add(UnclassifiedSection.parse(fromServer.getJSONObject(i)));
-			} catch (JSONException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		return resultList;
-	}
-
-	/*
 	 * Generates a notification for the user.
 	 */
 	
 	public void generateNotifications(JSONArray sections) {
 		if (sections.length() > 0) {
 			String message = "You have "+sections.length()+" pending trips to categorize";
-			generateNotification(CONFIRM_TRIPS_ID, message, edu.berkeley.eecs.e_mission.ConfirmSectionListActivity.class);
+			generateNotification(CONFIRM_TRIPS_ID, message, edu.berkeley.eecs.emission.MainActivity.class);
 		} else {
 			// no unclassified sections, don't generate a notification
 		}
@@ -220,7 +158,7 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 		System.out.println("While generating notification sectionId = "+messageId);
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(cachedContext);
 		builder.setAutoCancel(true);
-		builder.setSmallIcon(R.drawable.ic_launcher);
+		builder.setSmallIcon(R.drawable.icon);
 		builder.setContentTitle(cachedContext.getString(R.string.app_name));
 		builder.setContentText(message);
 		

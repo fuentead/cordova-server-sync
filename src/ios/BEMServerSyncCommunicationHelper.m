@@ -9,21 +9,31 @@
 #import <Foundation/NSObjCRuntime.h>
 #import <objc/objc.h>
 #import <objc/runtime.h>
-#import "DataUtils.h"
 #import "LocalNotificationManager.h"
-#import "BuiltinUserCache.h"
+
 #import "SimpleLocation.h"
 #import "TimeQuery.h"
 #import "MotionActivity.h"
-#import "CommunicationHelper.h"
 #import "LocationTrackingConfig.h"
+#import "BEMServerSyncCommunicationHelper.h"
 
-@implementation BEMCommunicationHelper
+#import "BEMCommunicationHelper.h"
+#import "BEMConnectionSettings.h"
+
+#import "BEMClientStatsDatabase.h"
+#import "BEMActivitySync.h"
+#import "BEMBuiltinUserCache.h"
+#import "BEMConstants.h"
+
+static NSString* kUsercachePutPath = @"/usercache/put";
+static NSString* kUsercacheGetPath = @"/usercache/get";
+static NSString* kSetStatsPath = @"/stats/set";
+
+@implementation BEMServerSyncCommunicationHelper
 
 + (void) backgroundSync:(void (^)(UIBackgroundFetchResult))completionHandler {
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                @"backgroundSync called"] showUI:TRUE];
-    BOOL overallStatus = TRUE;
     [self pushAndClearUserCache:^(BOOL status) {
         if (status == TRUE) {
             [LocalNotificationManager addNotification:[NSString stringWithFormat:
@@ -32,7 +42,6 @@
             [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                        @"pushAndClearUserCache failed"] showUI:FALSE];
         }
-        overallStatus = overallStatus && status;
     }];
     [self pullIntoUserCache:^(BOOL status) {
         if (status == TRUE) {
@@ -42,7 +51,6 @@
             [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                        @"pullIntoUserCache failed"] showUI:FALSE];
         }
-        overallStatus = overallStatus && status;
     }];
     [self pushAndClearStats:^(BOOL status) {
         if (status == TRUE) {
@@ -52,7 +60,6 @@
             [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                        @"pushAndClearStats failed"] showUI:FALSE];
         }
-        overallStatus = overallStatus && status;
     }];
     completionHandler(UIBackgroundFetchResultNewData);
 }
@@ -72,9 +79,10 @@
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                @"pushAndClearUserCache called"] showUI:TRUE];
     NSArray* locEntriesToPush = [[BuiltinUserCache database] syncPhoneToServer];
-    NSArray* combinedArray = [BEMActivitySync getCombinedArray:locEntriesToPush];
-    TimeQuery* tq = [BuiltinUserCache getTimeQuery:locationArray];
+    [BEMActivitySync getCombinedArray:locEntriesToPush withHandler:^(NSArray *combinedArray) {
+        TimeQuery* tq = [BuiltinUserCache getTimeQuery:locEntriesToPush];
     [self pushAndClearCombinedData:combinedArray timeQuery:tq completionHandler:completionHandler];
+    }];
 }
 
 + (void) pushAndClearCombinedData:(NSArray*)entriesToPush timeQuery:(TimeQuery*)tq completionHandler:(void (^)(BOOL))completionHandler {
@@ -127,41 +135,43 @@
         if (error != NULL) {
             NSLog(@"Got error %@ while retrieving data", error);
             if ([error.domain isEqualToString:errorDomain] && (error.code == authFailedNeedUserInput)) {
-                [self generateErrorNotificationImmediately:1 application:application];
+                [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                           @"Please sign in"] showUI:TRUE];
             }
             completionHandler(NO);
         } else {
             if (data == NULL) {
                 NSLog(@"Got data == NULL while retrieving data");
-                [_statsDb storeMeasurement:@"sync_pull_list_size" value:CLIENT_STATS_DB_NIL_VALUE ts:currTS];
+                [statsDb storeMeasurement:@"sync_pull_list_size" value:CLIENT_STATS_DB_NIL_VALUE ts:currTS];
                 completionHandler(YES);
             } else {
                 NSLog(@"Got non NULL data while retrieving data");
                 NSInteger newSectionCount = [self fetchedData:data];
                 NSLog(@"Section count = %ld", (long)newSectionCount);
-                [_statsDb storeMeasurement:@"sync_pull_list_size" value:[@(newSectionCount) stringValue] ts:currTS];
+                [statsDb storeMeasurement:@"sync_pull_list_size" value:[@(newSectionCount) stringValue] ts:currTS];
                 if (newSectionCount > 0) {
-                    [self generateLocalNotificationImmediately:newSectionCount application:application];
+                    [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                               @"Retrieved %ld documents", newSectionCount] showUI:FALSE];
                     // Note that we need to update the UI before calling the completion handler, otherwise
                     // when the view appears, users won't see the newly fetched data!
                     [[NSNotificationCenter defaultCenter] postNotificationName:BackgroundRefreshNewData
                                                                         object:self];
                     completionHandler(YES);
                 } else {
-                    [_statsDb storeMeasurement:@"sync_pull_list_size" value:@"0" ts:currTS];
+                    [statsDb storeMeasurement:@"sync_pull_list_size" value:@"0" ts:currTS];
                     completionHandler(YES);
                 }
             }
             long msTimeEnd = [[NSDate date] timeIntervalSince1970]*1000;
             long msDuration = msTimeEnd - msTimeStart;
-            [_statsDb storeMeasurement:@"sync_duration" value:[@(msDuration) stringValue] ts:currTS];
+            [statsDb storeMeasurement:@"sync_duration" value:[@(msDuration) stringValue] ts:currTS];
         }
     }];
 }
 
 // This is the callback that is invoked when the async data collection ends.
 // We are going to parse the JSON in here for simplicity
-- (NSInteger)fetchedData:(NSData *)responseData {
++ (NSInteger)fetchedData:(NSData *)responseData {
     NSError *error;
     NSDictionary *documentDict = [NSJSONSerialization JSONObjectWithData:responseData
                                                                 options:kNilOptions
@@ -184,15 +194,14 @@
     [executor execute];
 }
 
-- (void)pushAndClearStats:(void (^)(BOOL))completionHandler
++ (void)pushAndClearStats:(void (^)(BOOL))completionHandler
 {
     ClientStatsDatabase* statsDb = [ClientStatsDatabase database];
     NSString* currTs = [ClientStatsDatabase getCurrentTimeMillisString];
     NSDictionary *statsToSend = [statsDb getMeasurements];
     if ([statsToSend count] != 0) {
         // Also push the client level stats
-        [self setClientStats:statsToSend
-                      completionHandler:^(NSData *data, NSURLResponse* response, NSError* error){
+        [BEMServerSyncCommunicationHelper setClientStats:statsToSend completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
                           NSLog(@"Pushing stats to the server is complete with response = %@i and error = %@", response, error);
                           // If the error was null, the push was successful, and we can clear the database
                           // Should we check for the code in the response, or for the error?
@@ -208,7 +217,7 @@
     }
 }
 
-+(void)setClientStats:(NSMutableDictionary*)statsToSend completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
++(void)setClientStats:(NSDictionary*)statsToSend completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
     NSMutableDictionary *toPush = [[NSMutableDictionary alloc] init];
     [toPush setObject:statsToSend forKey:@"stats"];
     

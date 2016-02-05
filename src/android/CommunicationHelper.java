@@ -1,6 +1,14 @@
-package edu.berkeley.eecs.cordova.serversync;
+package edu.berkeley.eecs.emission.cordova.serversync;
 
-import edu.berkeley.eecs.cordova.settings.ConnectionSettings;
+import android.content.Context;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+
+import edu.berkeley.eecs.emission.cordova.connectionsettings.ConnectionSettings;
 
 public class CommunicationHelper {
     public static final String TAG = "CommunicationHelper";
@@ -11,7 +19,7 @@ public class CommunicationHelper {
     public static void pushStats(Context cachedContext, String userToken,
                                  JSONObject appStats) throws IOException, JSONException {
         String commuteTrackerHost = ConnectionSettings.getConnectURL(cachedContext);
-        edu.berkeley.eecs.cordova.comm.CommunicationHelper.pushJSON(
+        edu.berkeley.eecs.emission.cordova.comm.CommunicationHelper.pushJSON(
             cachedContext, commuteTrackerHost + "/stats/set", userToken, "stats", appStats);
     }
 
@@ -23,7 +31,8 @@ public class CommunicationHelper {
             throws IOException, JSONException {
         String commuteTrackerHost = ConnectionSettings.getConnectURL(cachedContext);
         String fullURL = commuteTrackerHost + "/usercache/get";
-        String rawJSON = edu.berkeley.eecs.cordova.comm.CommunicationHelper.getUserPersonalData(cachedContext, fullURL, userToken);
+        String rawJSON = edu.berkeley.eecs.emission.cordova.comm.CommunicationHelper.getUserPersonalData(
+                cachedContext, fullURL, userToken);
         if (rawJSON.trim().length() == 0) {
             // We didn't get anything from the server, so let's return an empty array for now
             // TODO: Figure out whether we need to return a blank array from the server instead
@@ -39,7 +48,8 @@ public class CommunicationHelper {
     public static void phone_to_server(Context cachedContext, String userToken, JSONArray entryArr)
             throws IOException, JSONException {
         String commuteTrackerHost = ConnectionSettings.getConnectURL(cachedContext);
-        pushJSON(cachedContext, commuteTrackerHost + "/usercache/put",
+        edu.berkeley.eecs.emission.cordova.comm.CommunicationHelper.pushJSON(
+                cachedContext, commuteTrackerHost + "/usercache/put",
                 userToken, "phone_to_server", entryArr);
     }
 }

@@ -9,7 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
 
-@interface BEMCommunicationHelper: NSObject
+@interface BEMServerSyncCommunicationHelper: NSObject
 // Top level method
 + (void) backgroundSync:(void (^)(UIBackgroundFetchResult))completionHandler;
 
@@ -21,8 +21,8 @@
 // Communication methods (copied from communication handler to make it generic)
 +(void)phone_to_server:(NSArray*) entriesToPush
      completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
-+(void)server_to_phone:completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
-+(void)setClientStats:(NSMutableDictionary*) statsToSend
-     completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
++(void)server_to_phone:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
++(void)setClientStats:(NSDictionary*)statsToSend completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler;
 
++ (NSInteger)fetchedData:(NSData *)responseData;
 @end
