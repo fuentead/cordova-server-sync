@@ -21,6 +21,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.Properties;
 
+import edu.berkeley.eecs.emission.cordova.tracker.location.TripDiaryStateMachineService;
 import edu.berkeley.eecs.emission.cordova.tracker.sensors.BatteryUtils;
 import edu.berkeley.eecs.emission.cordova.clientstats.ClientStatsHelper;
 import edu.berkeley.eecs.emission.R;
@@ -28,6 +29,7 @@ import edu.berkeley.eecs.emission.cordova.jwtauth.GoogleAccountManagerAuth;
 import edu.berkeley.eecs.emission.cordova.jwtauth.UserProfile;
 import edu.berkeley.eecs.emission.cordova.unifiedlogger.Log;
 import edu.berkeley.eecs.emission.cordova.usercache.BuiltinUserCache;
+import edu.berkeley.eecs.emission.cordova.usercache.UserCache;
 
 /**
  * @author shankari
@@ -103,7 +105,22 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 		 */
 		BuiltinUserCache biuc = new BuiltinUserCache(cachedContext);
 
-		Log.i(cachedContext, TAG, "No push in e-mission, now pulling");
+		try {
+			JSONArray entriesToPush = biuc.sync_phone_to_server();
+			if (entriesToPush.length() == 0) {
+				System.out.println("No data to send, returning early!");
+			} else {
+				CommunicationHelper.phone_to_server(cachedContext, userToken, entriesToPush);
+				UserCache.TimeQuery tq = getTimeQuery(entriesToPush);
+				biuc.clearEntries(tq);
+			}
+		} catch (JSONException e) {
+			Log.e(cachedContext, TAG, "Error "+e+" while saving converting trips to JSON, skipping all of them");
+		} catch (IOException e) {
+			Log.e(cachedContext, TAG, "IO Error "+e+" while posting converted trips to JSON");
+		}
+
+		Log.i(cachedContext, TAG, "Push complete, now pulling");
 
         /*
          * Now, read all the information from the server. This is in a different try/catch block,
@@ -138,6 +155,43 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+
+        /*
+         * Now, do some validation of the current state and clean it up if necessary. This should
+         * help with issues we have seen in the field where location updates pause mysteriously, or
+         * geofences are never exited.
+         */
+		validateAndCleanupState();
+	}
+
+	/*
+	 * TODO: This should probably be moved into the state machine code somehow
+	 */
+	public void validateAndCleanupState() {
+        /*
+         * Check for being in geofence if in waiting_for_trip_state.
+         */
+		if (TripDiaryStateMachineService.getState(cachedContext).equals(cachedContext.getString(R.string.state_start))) {
+			cachedContext.sendBroadcast(new Intent(cachedContext.getString(R.string.transition_initialize)));
+		} else if (TripDiaryStateMachineService.getState(cachedContext).equals(
+				cachedContext.getString(R.string.state_waiting_for_trip_start))) {
+			// check in geofence
+		}
+	}
+
+	/*
+	 * TODO: This should probably be moved into the usercache somehow
+	 */
+	public static UserCache.TimeQuery getTimeQuery(JSONArray pointList) throws JSONException {
+		long start_ts = pointList.getJSONObject(0).getJSONObject("metadata").getLong("write_ts");
+		long end_ts = pointList.getJSONObject(pointList.length() - 1).getJSONObject("metadata").getLong("write_ts");
+		// This might still have a race in which there are new entries added with the same timestamp as the last
+		// entry. Use an id instead? Or manually choose a slightly earlier ts to be on the safe side?
+		// TODO: Need to figure out which one to do
+		// Start slightly before and end slightly after to make sure that we get all entries
+		UserCache.TimeQuery tq = new UserCache.TimeQuery(R.string.metadata_usercache_write_ts,
+				start_ts - 1, end_ts + 1);
+		return tq;
 	}
 
 	/*
