@@ -79,6 +79,12 @@ static NSString* kSetStatsPath = @"/stats/set";
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                @"pushAndClearUserCache called"] showUI:TRUE];
     NSArray* locEntriesToPush = [[BuiltinUserCache database] syncPhoneToServer];
+    if ([locEntriesToPush count] == 0) {
+        [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                   @"locEntriesToPush count == 0, returning "] showUI:TRUE];
+        completionHandler(TRUE);
+        return;
+    }
     [BEMActivitySync getCombinedArray:locEntriesToPush withHandler:^(NSArray *combinedArray) {
         TimeQuery* tq = [BuiltinUserCache getTimeQuery:locEntriesToPush];
     [self pushAndClearCombinedData:combinedArray timeQuery:tq completionHandler:completionHandler];
@@ -87,17 +93,22 @@ static NSString* kSetStatsPath = @"/stats/set";
 
 + (void) pushAndClearCombinedData:(NSArray*)entriesToPush timeQuery:(TimeQuery*)tq completionHandler:(void (^)(BOOL))completionHandler {
     if (entriesToPush.count == 0) {
+        [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                   @"No data to send, returning early"] showUI:TRUE];
         NSLog(@"No data to send, returning early");
     } else {
         [self phone_to_server:entriesToPush
                              completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                 // Only delete trips after they have been successfully pushed
+                                 if (error == nil) {
                                  [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                                             @"successfully pushed %ld entries to the server",
                                                                             (unsigned long)entriesToPush.count]
                                                                     showUI:TRUE];
-                                 // Only delete trips after they have been successfully pushed
-                                 if (error == nil) {
                                      [[BuiltinUserCache database] clearEntries:tq];
+                                 } else {
+                                     [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                                                @"Got error %@ while pushing changes to server, retaining data", error] showUI:TRUE];
                                  }
                                  NSLog(@"Returning from silent push");
                                  completionHandler(TRUE);
@@ -151,7 +162,7 @@ static NSString* kSetStatsPath = @"/stats/set";
                 [statsDb storeMeasurement:@"sync_pull_list_size" value:[@(newSectionCount) stringValue] ts:currTS];
                 if (newSectionCount > 0) {
                     [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                               @"Retrieved %ld documents", newSectionCount] showUI:FALSE];
+                                                               @"Retrieved %ld documents", newSectionCount] showUI:TRUE];
                     // Note that we need to update the UI before calling the completion handler, otherwise
                     // when the view appears, users won't see the newly fetched data!
                     [[NSNotificationCenter defaultCenter] postNotificationName:BackgroundRefreshNewData
@@ -176,9 +187,13 @@ static NSString* kSetStatsPath = @"/stats/set";
     NSDictionary *documentDict = [NSJSONSerialization JSONObjectWithData:responseData
                                                                 options:kNilOptions
                                                                   error: &error];
-    
     NSArray *newDocs = [documentDict objectForKey:@"server_to_phone"];
+    for (NSDictionary* currDoc in newDocs) {
+        [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                   @"currDoc has keys %@", currDoc.allKeys] showUI:FALSE];
+    }
     [[BuiltinUserCache database] syncServerToPhone:newDocs];
+    
     NSLog(@"documents: %@", newDocs);
     
     return [newDocs count];

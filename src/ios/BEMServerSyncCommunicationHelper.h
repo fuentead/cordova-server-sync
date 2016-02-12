@@ -9,9 +9,11 @@
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
 
+typedef void (^SilentPushCompletionHandler)(UIBackgroundFetchResult);
+
 @interface BEMServerSyncCommunicationHelper: NSObject
 // Top level method
-+ (void) backgroundSync:(void (^)(UIBackgroundFetchResult))completionHandler;
++ (void) backgroundSync:(SilentPushCompletionHandler)completionHandler;
 
 // Wrappers around the communication methods
 + (void) pushAndClearUserCache:(void (^)(BOOL))completionHandler;
