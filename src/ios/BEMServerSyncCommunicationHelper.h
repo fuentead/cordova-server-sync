@@ -8,17 +8,18 @@
 
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
+#import "Bolts/BFTask.h"
 
 typedef void (^SilentPushCompletionHandler)(UIBackgroundFetchResult);
 
 @interface BEMServerSyncCommunicationHelper: NSObject
 // Top level method
-+ (void) backgroundSync:(SilentPushCompletionHandler)completionHandler;
++ (BFTask*) backgroundSync;
 
 // Wrappers around the communication methods
-+ (void) pushAndClearUserCache:(void (^)(BOOL))completionHandler;
-+ (void) pullIntoUserCache:(void (^)(BOOL))completionHandler;
-+ (void) pushAndClearStats:(void (^)(BOOL))completionHandler;
++ (BFTask*) pushAndClearUserCache;
++ (BFTask*) pullIntoUserCache;
++ (BFTask*) pushAndClearStats;
 
 // Communication methods (copied from communication handler to make it generic)
 +(void)phone_to_server:(NSArray*) entriesToPush

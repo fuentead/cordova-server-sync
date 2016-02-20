@@ -24,6 +24,7 @@
 #import "BEMActivitySync.h"
 #import "BEMBuiltinUserCache.h"
 #import "BEMConstants.h"
+#import "Bolts/Bolts.h"
 
 static NSString* kUsercachePutPath = @"/usercache/put";
 static NSString* kUsercacheGetPath = @"/usercache/get";
@@ -31,40 +32,18 @@ static NSString* kSetStatsPath = @"/stats/set";
 
 @implementation BEMServerSyncCommunicationHelper
 
-+ (void) backgroundSync:(void (^)(UIBackgroundFetchResult))completionHandler {
++ (BFTask*) backgroundSync {
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                @"backgroundSync called"] showUI:TRUE];
-    [self pushAndClearUserCache:^(BOOL status) {
-        if (status == TRUE) {
-            [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                       @"pushAndClearUserCache successful"] showUI:FALSE];
-        } else {
-            [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                       @"pushAndClearUserCache failed"] showUI:FALSE];
-        }
-    }];
-    [self pullIntoUserCache:^(BOOL status) {
-        if (status == TRUE) {
-            [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                       @"pullIntoUserCache successful"] showUI:FALSE];
-        } else {
-            [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                       @"pullIntoUserCache failed"] showUI:FALSE];
-        }
-    }];
-    [self pushAndClearStats:^(BOOL status) {
-        if (status == TRUE) {
-            [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                       @"pushAndClearStats successful"] showUI:FALSE];
-        } else {
-            [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                       @"pushAndClearStats failed"] showUI:FALSE];
-        }
-    }];
-    completionHandler(UIBackgroundFetchResultNewData);
+    
+    NSMutableArray *tasks = [NSMutableArray array];
+    [tasks addObject:[self pushAndClearUserCache]];
+    [tasks addObject:[self pullIntoUserCache]];
+    [tasks addObject:[self pushAndClearStats]];
+    return [BFTask taskForCompletionOfAllTasks:tasks];
 }
 
-+ (void) pushAndClearUserCache:(void (^)(BOOL))completionHandler {
++ (BFTask*) pushAndClearUserCache {
     /*
      * In iOS, we can only sign up for activity updates when the app is in the foreground
      * (from https://developer.apple.com/library/ios/documentation/CoreMotion/Reference/CMMotionActivityManager_class/index.html#//apple_ref/occ/instm/CMMotionActivityManager/startActivityUpdatesToQueue:withHandler:)
@@ -82,16 +61,19 @@ static NSString* kSetStatsPath = @"/stats/set";
     if ([locEntriesToPush count] == 0) {
         [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                    @"locEntriesToPush count == 0, returning "] showUI:TRUE];
-        completionHandler(TRUE);
-        return;
+        return [BFTask taskWithResult:@(TRUE)];
     }
+    
+    BFTaskCompletionSource *task = [BFTaskCompletionSource taskCompletionSource];
     [BEMActivitySync getCombinedArray:locEntriesToPush withHandler:^(NSArray *combinedArray) {
         TimeQuery* tq = [BuiltinUserCache getTimeQuery:locEntriesToPush];
-    [self pushAndClearCombinedData:combinedArray timeQuery:tq completionHandler:completionHandler];
+        [self pushAndClearCombinedData:combinedArray timeQuery:tq task:task];
     }];
+    return task.task;
 }
 
-+ (void) pushAndClearCombinedData:(NSArray*)entriesToPush timeQuery:(TimeQuery*)tq completionHandler:(void (^)(BOOL))completionHandler {
++ (void) pushAndClearCombinedData:(NSArray*)entriesToPush timeQuery:(TimeQuery*)tq
+                                task:(BFTaskCompletionSource*)task {
     if (entriesToPush.count == 0) {
         [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                    @"No data to send, returning early"] showUI:TRUE];
@@ -111,7 +93,7 @@ static NSString* kSetStatsPath = @"/stats/set";
                                                                                 @"Got error %@ while pushing changes to server, retaining data", error] showUI:TRUE];
                                  }
                                  NSLog(@"Returning from silent push");
-                                 completionHandler(TRUE);
+                                 [task setResult:@(TRUE)];
                              }];
     }
 }
@@ -128,12 +110,13 @@ static NSString* kSetStatsPath = @"/stats/set";
     [executor execute];
 }
 
-+(void) pullIntoUserCache:(void (^)(BOOL))completionHandler {
++(BFTask*) pullIntoUserCache {
     /*
      * Every time the app is launched, check the battery level. We are not signing up for battery level notifications because we don't want
      * to contribute to the battery drain ourselves. Instead, we are going to check the battery level when the app is launched anyway for other reasons,
      * by the user, or as part of background sync.
      */
+    BFTaskCompletionSource *task = [BFTaskCompletionSource taskCompletionSource];
     ClientStatsDatabase* statsDb = [ClientStatsDatabase database];
     NSString* currTS = [ClientStatsDatabase getCurrentTimeMillisString];
     NSString* batteryLevel = [@([UIDevice currentDevice].batteryLevel) stringValue];
@@ -149,12 +132,12 @@ static NSString* kSetStatsPath = @"/stats/set";
                 [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                            @"Please sign in"] showUI:TRUE];
             }
-            completionHandler(NO);
+            [task setResult:@(FALSE)];
         } else {
             if (data == NULL) {
                 NSLog(@"Got data == NULL while retrieving data");
                 [statsDb storeMeasurement:@"sync_pull_list_size" value:CLIENT_STATS_DB_NIL_VALUE ts:currTS];
-                completionHandler(YES);
+                [task setResult:@(TRUE)];
             } else {
                 NSLog(@"Got non NULL data while retrieving data");
                 NSInteger newSectionCount = [self fetchedData:data];
@@ -167,17 +150,18 @@ static NSString* kSetStatsPath = @"/stats/set";
                     // when the view appears, users won't see the newly fetched data!
                     [[NSNotificationCenter defaultCenter] postNotificationName:BackgroundRefreshNewData
                                                                         object:self];
-                    completionHandler(YES);
+                    [task setResult:@(TRUE)];
                 } else {
                     [statsDb storeMeasurement:@"sync_pull_list_size" value:@"0" ts:currTS];
-                    completionHandler(YES);
+                    [task setResult:@(TRUE)];
                 }
             }
             long msTimeEnd = [[NSDate date] timeIntervalSince1970]*1000;
             long msDuration = msTimeEnd - msTimeStart;
-            [statsDb storeMeasurement:@"sync_duration" value:[@(msDuration) stringValue] ts:currTS];
+            [statsDb storeMeasurement:@"pull_duration" value:[@(msDuration) stringValue] ts:currTS];
         }
     }];
+    return task.task;
 }
 
 // This is the callback that is invoked when the async data collection ends.
@@ -194,7 +178,7 @@ static NSString* kSetStatsPath = @"/stats/set";
     }
     [[BuiltinUserCache database] syncServerToPhone:newDocs];
     
-    NSLog(@"documents: %@", newDocs);
+    // NSLog(@"documents: %@", newDocs);
     
     return [newDocs count];
 }
@@ -209,10 +193,12 @@ static NSString* kSetStatsPath = @"/stats/set";
     [executor execute];
 }
 
-+ (void)pushAndClearStats:(void (^)(BOOL))completionHandler
++ (BFTask*)pushAndClearStats
 {
+    BFTaskCompletionSource *task = [BFTaskCompletionSource taskCompletionSource];
     ClientStatsDatabase* statsDb = [ClientStatsDatabase database];
     NSString* currTs = [ClientStatsDatabase getCurrentTimeMillisString];
+    long msTimeStart = [ClientStatsDatabase getCurrentTimeMillis];
     NSDictionary *statsToSend = [statsDb getMeasurements];
     if ([statsToSend count] != 0) {
         // Also push the client level stats
@@ -222,14 +208,19 @@ static NSString* kSetStatsPath = @"/stats/set";
                           // Should we check for the code in the response, or for the error?
                           if(error == NULL) {
                               [statsDb clear];
-                              completionHandler(TRUE);
+                              // TODO: Replace by setError once we are able to test how it works
+                              [task setResult:@(TRUE)];
                           } else {
-                              completionHandler(FALSE);
+                              [task setResult:@(FALSE)];
                           }
+            long msTimeEnd = [[NSDate date] timeIntervalSince1970]*1000;
+            long msDuration = msTimeEnd - msTimeStart;
+            [statsDb storeMeasurement:@"push_stats_duration" value:[@(msDuration) stringValue] ts:currTs];
                       }];
     } else {
-        completionHandler(TRUE);
+        [task setResult:@(TRUE)];
     }
+    return task.task;
 }
 
 +(void)setClientStats:(NSDictionary*)statsToSend completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {

@@ -1,5 +1,6 @@
 #import "BEMServerSyncPlugin.h"
 #import "BEMServerSyncCommunicationHelper.h"
+#import "LocalNotificationManager.h"
 
 @implementation BEMServerSyncPlugin
 
@@ -25,10 +26,13 @@
 {
     NSString* callbackId = [command callbackId];
     @try {
-        [BEMServerSyncCommunicationHelper backgroundSync:^(UIBackgroundFetchResult fetcResult) {
+        [[BEMServerSyncCommunicationHelper backgroundSync] continueWithBlock:^id(BFTask *task) {
+            [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                       @"all sync completed"] showUI:TRUE];
             CDVPluginResult* result = [CDVPluginResult
                                        resultWithStatus:CDVCommandStatus_OK];
             [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+            return nil;
         }];
     }
     @catch (NSException *exception) {
