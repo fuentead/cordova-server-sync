@@ -38,22 +38,25 @@ public class ServerSyncPlugin extends CordovaPlugin {
     private static String TAG = "ServerSyncPlugin";
 
     @Override
+    protected void pluginInitialize() {
+        mAccount = GetOrCreateSyncAccount(actv); 
+        System.out.println("mAccount = "+mAccount);
+
+        // TODO: In cfc_tracker but not in e_mission. Needed?
+        mResolver = actv.getContentResolver();
+
+        // Get the content resolver for your app
+        // Turn on automatic syncing for the default account and authority
+        ContentResolver.setIsSyncable(mAccount, AUTHORITY, 1);
+        ContentResolver.setSyncAutomatically(mAccount, AUTHORITY, true);
+        ContentResolver.addPeriodicSync(mAccount, AUTHORITY, new Bundle(), SYNC_INTERVAL);
+    }
+
+    @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
             Activity actv = cordova.getActivity();
 
         if (action.equals("init")) {
-            mAccount = GetOrCreateSyncAccount(actv); 
-            System.out.println("mAccount = "+mAccount);
-
-            // TODO: In cfc_tracker but not in e_mission. Needed?
-            mResolver = actv.getContentResolver();
-
-            // Get the content resolver for your app
-            // Turn on automatic syncing for the default account and authority
-            ContentResolver.setIsSyncable(mAccount, AUTHORITY, 1);
-            ContentResolver.setSyncAutomatically(mAccount, AUTHORITY, true);
-            ContentResolver.addPeriodicSync(mAccount, AUTHORITY, new Bundle(), SYNC_INTERVAL);
-            callbackContext.success();
             return true;
         } else if (action.equals("forceSync")) {
             Context ctxt = cordova.getActivity();
