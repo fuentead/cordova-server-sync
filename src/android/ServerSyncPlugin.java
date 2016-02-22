@@ -39,6 +39,7 @@ public class ServerSyncPlugin extends CordovaPlugin {
 
     @Override
     protected void pluginInitialize() {
+        Activity actv = cordova.getActivity();
         mAccount = GetOrCreateSyncAccount(actv); 
         System.out.println("mAccount = "+mAccount);
 
@@ -54,7 +55,7 @@ public class ServerSyncPlugin extends CordovaPlugin {
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
-            Activity actv = cordova.getActivity();
+        Activity actv = cordova.getActivity();
 
         if (action.equals("init")) {
             return true;
