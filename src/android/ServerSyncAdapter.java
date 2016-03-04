@@ -13,6 +13,7 @@ import android.content.Intent;
 import android.content.SyncResult;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.content.LocalBroadcastManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -21,7 +22,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.Properties;
 
-import edu.berkeley.eecs.emission.cordova.tracker.location.TripDiaryStateMachineService;
+import edu.berkeley.eecs.emission.cordova.tracker.location.TripDiaryStateMachineReceiver;
 import edu.berkeley.eecs.emission.cordova.tracker.sensors.BatteryUtils;
 import edu.berkeley.eecs.emission.cordova.clientstats.ClientStatsHelper;
 import edu.berkeley.eecs.emission.R;
@@ -161,22 +162,14 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
          * help with issues we have seen in the field where location updates pause mysteriously, or
          * geofences are never exited.
          */
-		validateAndCleanupState();
-	}
-
-	/*
-	 * TODO: This should probably be moved into the state machine code somehow
-	 */
-	public void validateAndCleanupState() {
-        /*
-         * Check for being in geofence if in waiting_for_trip_state.
-         */
-		if (TripDiaryStateMachineService.getState(cachedContext).equals(cachedContext.getString(R.string.state_start))) {
-			cachedContext.sendBroadcast(new Intent(cachedContext.getString(R.string.transition_initialize)));
-		} else if (TripDiaryStateMachineService.getState(cachedContext).equals(
-				cachedContext.getString(R.string.state_waiting_for_trip_start))) {
-			// check in geofence
-		}
+		TripDiaryStateMachineReceiver.validateAndCleanupState(cachedContext);
+		// We are sending this only locally, so we don't care about the URI and so on.
+        Intent localIntent = new Intent("edu.berkeley.eecs.emission.sync.NEW_DATA");
+        Bundle b = new Bundle();
+        b.putString( "userdata", "{}" );
+        localIntent.putExtras(b);
+        Log.i(cachedContext, TAG, "Finished sync, sending local broadcast");
+        LocalBroadcastManager.getInstance(cachedContext).sendBroadcastSync(localIntent);
 	}
 
 	/*

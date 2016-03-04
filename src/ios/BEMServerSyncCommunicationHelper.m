@@ -116,18 +116,27 @@ static NSString* kSetStatsPath = @"/stats/set";
      * to contribute to the battery drain ourselves. Instead, we are going to check the battery level when the app is launched anyway for other reasons,
      * by the user, or as part of background sync.
      */
+    [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                               @"pullIntoUserCache called"] showUI:TRUE];
     BFTaskCompletionSource *task = [BFTaskCompletionSource taskCompletionSource];
     ClientStatsDatabase* statsDb = [ClientStatsDatabase database];
     NSString* currTS = [ClientStatsDatabase getCurrentTimeMillisString];
     NSString* batteryLevel = [@([UIDevice currentDevice].batteryLevel) stringValue];
     [statsDb storeMeasurement:@"battery_level" value:batteryLevel ts:currTS];
     
+    [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                               @"about to launch remote call for server_to_phone"] showUI:TRUE];
     long msTimeStart = [ClientStatsDatabase getCurrentTimeMillis];
     
     // Called in order to download data in the background
     [self server_to_phone:^(NSData *data, NSURLResponse *response, NSError *error) {
+        [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                   @"received response for server_to_phone"] showUI:TRUE];
+
         if (error != NULL) {
-            NSLog(@"Got error %@ while retrieving data", error);
+            [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                       @"Got error %@ while retrieving data", error] showUI:TRUE];
+
             if ([error.domain isEqualToString:errorDomain] && (error.code == authFailedNeedUserInput)) {
                 [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                            @"Please sign in"] showUI:TRUE];
@@ -135,21 +144,26 @@ static NSString* kSetStatsPath = @"/stats/set";
             [task setResult:@(FALSE)];
         } else {
             if (data == NULL) {
-                NSLog(@"Got data == NULL while retrieving data");
+                [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                           @"Got data == NULL while retrieving data"] showUI:TRUE];
+
                 [statsDb storeMeasurement:@"sync_pull_list_size" value:CLIENT_STATS_DB_NIL_VALUE ts:currTS];
                 [task setResult:@(TRUE)];
             } else {
-                NSLog(@"Got non NULL data while retrieving data");
+                [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                           @"Got non NULL data while retrieving data"] showUI:TRUE];
                 NSInteger newSectionCount = [self fetchedData:data];
-                NSLog(@"Section count = %ld", (long)newSectionCount);
+                [LocalNotificationManager addNotification:[NSString stringWithFormat:
+                                                           @"Retrieved %@ documents", @(newSectionCount)] showUI:TRUE];
                 [statsDb storeMeasurement:@"sync_pull_list_size" value:[@(newSectionCount) stringValue] ts:currTS];
                 if (newSectionCount > 0) {
-                    [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                               @"Retrieved %ld documents", newSectionCount] showUI:TRUE];
                     // Note that we need to update the UI before calling the completion handler, otherwise
                     // when the view appears, users won't see the newly fetched data!
                     [[NSNotificationCenter defaultCenter] postNotificationName:BackgroundRefreshNewData
                                                                         object:self];
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"edu.berkeley.eecs.emission.sync.NEW_DATA"
+                                                                        object:nil
+                                                                      userInfo:nil];
                     [task setResult:@(TRUE)];
                 } else {
                     [statsDb storeMeasurement:@"sync_pull_list_size" value:@"0" ts:currTS];
