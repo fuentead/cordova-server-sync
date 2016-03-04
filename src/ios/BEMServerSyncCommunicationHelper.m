@@ -56,11 +56,11 @@ static NSString* kSetStatsPath = @"/stats/set";
      * We need to test this more carefully when we switch to the visit-based tracking.
      */
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                               @"pushAndClearUserCache called"] showUI:TRUE];
+                                               @"pushAndClearUserCache called"] showUI:FALSE];
     NSArray* locEntriesToPush = [[BuiltinUserCache database] syncPhoneToServer];
     if ([locEntriesToPush count] == 0) {
         [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                   @"locEntriesToPush count == 0, returning "] showUI:TRUE];
+                                                   @"locEntriesToPush count == 0, returning "] showUI:FALSE];
         return [BFTask taskWithResult:@(TRUE)];
     }
     
@@ -76,8 +76,7 @@ static NSString* kSetStatsPath = @"/stats/set";
                                 task:(BFTaskCompletionSource*)task {
     if (entriesToPush.count == 0) {
         [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                   @"No data to send, returning early"] showUI:TRUE];
-        NSLog(@"No data to send, returning early");
+                                                   @"No data to send, returning early"] showUI:FALSE];
     } else {
         [self phone_to_server:entriesToPush
                              completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -92,7 +91,6 @@ static NSString* kSetStatsPath = @"/stats/set";
                                      [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                                                 @"Got error %@ while pushing changes to server, retaining data", error] showUI:TRUE];
                                  }
-                                 NSLog(@"Returning from silent push");
                                  [task setResult:@(TRUE)];
                              }];
     }
@@ -117,7 +115,7 @@ static NSString* kSetStatsPath = @"/stats/set";
      * by the user, or as part of background sync.
      */
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                               @"pullIntoUserCache called"] showUI:TRUE];
+                                               @"pullIntoUserCache called"] showUI:FALSE];
     BFTaskCompletionSource *task = [BFTaskCompletionSource taskCompletionSource];
     ClientStatsDatabase* statsDb = [ClientStatsDatabase database];
     NSString* currTS = [ClientStatsDatabase getCurrentTimeMillisString];
@@ -125,13 +123,13 @@ static NSString* kSetStatsPath = @"/stats/set";
     [statsDb storeMeasurement:@"battery_level" value:batteryLevel ts:currTS];
     
     [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                               @"about to launch remote call for server_to_phone"] showUI:TRUE];
+                                               @"about to launch remote call for server_to_phone"] showUI:FALSE];
     long msTimeStart = [ClientStatsDatabase getCurrentTimeMillis];
     
     // Called in order to download data in the background
     [self server_to_phone:^(NSData *data, NSURLResponse *response, NSError *error) {
         [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                   @"received response for server_to_phone"] showUI:TRUE];
+                                                   @"received response for server_to_phone"] showUI:FALSE];
 
         if (error != NULL) {
             [LocalNotificationManager addNotification:[NSString stringWithFormat:
@@ -151,7 +149,7 @@ static NSString* kSetStatsPath = @"/stats/set";
                 [task setResult:@(TRUE)];
             } else {
                 [LocalNotificationManager addNotification:[NSString stringWithFormat:
-                                                           @"Got non NULL data while retrieving data"] showUI:TRUE];
+                                                           @"Got non NULL data while retrieving data"] showUI:FALSE];
                 NSInteger newSectionCount = [self fetchedData:data];
                 [LocalNotificationManager addNotification:[NSString stringWithFormat:
                                                            @"Retrieved %@ documents", @(newSectionCount)] showUI:TRUE];
