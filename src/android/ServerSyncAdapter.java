@@ -106,6 +106,7 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 		 */
 		BuiltinUserCache biuc = new BuiltinUserCache(cachedContext);
 
+		Log.i(cachedContext, TAG, "Starting sync with push");
 		try {
 			JSONArray entriesToPush = biuc.sync_phone_to_server();
 			if (entriesToPush.length() == 0) {
