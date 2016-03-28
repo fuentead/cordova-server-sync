@@ -164,6 +164,7 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
          * geofences are never exited.
          */
 		TripDiaryStateMachineReceiver.validateAndCleanupState(cachedContext);
+		TripDiaryStateMachineReceiver.saveBatteryAndSimulateUser(cachedContext);
 		// We are sending this only locally, so we don't care about the URI and so on.
         Intent localIntent = new Intent("edu.berkeley.eecs.emission.sync.NEW_DATA");
         Bundle b = new Bundle();
