@@ -75,7 +75,7 @@ public class ServerSyncAdapter extends AbstractThreadedSyncAdapter {
 		 * Read the battery level when the app is being launched anyway.
 		 */
 		statsHelper.storeMeasurement(cachedContext.getString(R.string.battery_level),
-				String.valueOf(BatteryUtils.getBatteryLevel(cachedContext)), syncTs);
+				String.valueOf(BatteryUtils.getBatteryInfo(cachedContext).getBatteryLevelPct()), syncTs);
 				
 		if (syncSkip == true) {
 			System.err.println("Something is wrong and we have been asked to skip the sync, exiting immediately");
